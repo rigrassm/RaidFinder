@@ -18,100 +18,122 @@
  */
 
 #include "ProfileLoader.hpp"
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QSettings>
+#include <fstream>
+#include <nlohmann/json.hpp>
+#include <sstream>
 
 namespace
 {
-    Profile getProfile(const QJsonObject &object)
+    std::string path;
+
+    Profile getProfile(const nlohmann::json &j)
     {
-        Profile profile(object["name"].toString(), static_cast<u16>(object["tid"].toInt()), static_cast<u16>(object["sid"].toInt()),
-                        static_cast<Game>(object["version"].toInt()));
+        Profile profile(j["name"].get<std::string>(), j["tid"].get<u16>(), j["sid"].get<u16>(), j["version"].get<Game>());
         return profile;
     }
 
-    QJsonObject getJson(const Profile &profile)
+    nlohmann::json getJson(const Profile &profile)
     {
-        QJsonObject data;
+        nlohmann::json data;
         data["name"] = profile.getName();
         data["tid"] = profile.getTID();
         data["sid"] = profile.getSID();
         data["version"] = profile.getVersion();
         return data;
     }
-}
 
-QVector<Profile> ProfileLoader::getProfiles()
-{
-    QVector<Profile> profileList;
-    QSettings setting;
-
-    QJsonObject profiles(QJsonDocument::fromJson(setting.value("profiles").toByteArray()).object());
-    QJsonArray gen8 = profiles["gen8"].toArray();
-
-    for (auto i : gen8)
+    nlohmann::json readJson()
     {
-        profileList.append(getProfile(i.toObject()));
+        nlohmann::json j;
+
+        std::ifstream read(path);
+        if (read.is_open())
+        {
+            j = nlohmann::json::parse(read, nullptr, false);
+        }
+
+        return j.is_discarded() ? nlohmann::json() : j;
     }
 
-    return profileList;
-}
-
-void ProfileLoader::addProfile(const Profile &profile)
-{
-    QSettings setting;
-
-    QJsonObject profiles(QJsonDocument::fromJson(setting.value("profiles").toByteArray()).object());
-    QJsonArray gen8 = profiles["gen8"].toArray();
-
-    gen8.append(getJson(profile));
-    profiles["gen8"] = gen8;
-
-    setting.setValue("profiles", QJsonDocument(profiles).toJson());
-}
-
-void ProfileLoader::removeProfile(const Profile &remove)
-{
-    QSettings setting;
-
-    QJsonObject profiles(QJsonDocument::fromJson(setting.value("profiles").toByteArray()).object());
-    QJsonArray gen8 = profiles["gen8"].toArray();
-
-    for (auto i = 0; i < gen8.size(); i++)
+    void writeJson(const nlohmann::json &j)
     {
-        Profile profile = getProfile(gen8[i].toObject());
+        std::ofstream write(path);
+        write << j.dump();
+        write.close();
+    }
+}
 
-        if (profile == remove)
+namespace ProfileLoader
+{
+    void init(const std::string &location)
+    {
+        path = location;
+
+        std::ifstream file(path);
+        if (!file)
         {
-            gen8.removeAt(i);
-            profiles["gen8"] = gen8;
-
-            setting.setValue("profiles", QJsonDocument(profiles).toJson());
-            break;
+            std::ofstream json(path);
+            json << "{}";
+            json.close();
         }
     }
-}
 
-void ProfileLoader::updateProfile(const Profile &update, const Profile &original)
-{
-    QSettings setting;
-
-    QJsonObject profiles = QJsonDocument::fromJson(setting.value("profiles").toByteArray()).object();
-    QJsonArray gen8 = profiles["gen8"].toArray();
-
-    for (auto i = 0; i < gen8.size(); i++)
+    std::vector<Profile> getProfiles()
     {
-        Profile profile = getProfile(gen8[i].toObject());
+        std::vector<Profile> profiles;
 
-        if (original == profile && original != update)
+        nlohmann::json j = readJson();
+        const auto &gen8 = j["gen8"];
+        std::transform(gen8.begin(), gen8.end(), std::back_inserter(profiles), [](const nlohmann::json &j) { return getProfile(j); });
+
+        return profiles;
+    }
+
+    void addProfile(const Profile &profile)
+    {
+        nlohmann::json j = readJson();
+
+        auto &gen8 = j["gen8"];
+        gen8.emplace_back(getJson(profile));
+
+        writeJson(j);
+    }
+
+    void removeProfile(const Profile &remove)
+    {
+        nlohmann::json j = readJson();
+
+        auto &gen8 = j["gen8"];
+        for (size_t i = 0; i < gen8.size(); i++)
         {
-            gen8[i] = getJson(update);
-            profiles["gen8"] = gen8;
+            Profile profile = getProfile(gen8[i]);
 
-            setting.setValue("profiles", QJsonDocument(profiles).toJson());
-            break;
+            if (profile == remove)
+            {
+                gen8.erase(gen8.begin() + i);
+
+                writeJson(j);
+                break;
+            }
+        }
+    }
+
+    void updateProfile(const Profile &update, const Profile &original)
+    {
+        nlohmann::json j = readJson();
+
+        auto &gen8 = j["gen8"];
+        for (auto &i : gen8)
+        {
+            Profile profile = getProfile(i);
+
+            if (original == profile && original != update)
+            {
+                i = getJson(update);
+
+                writeJson(j);
+                break;
+            }
         }
     }
 }

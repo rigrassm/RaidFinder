@@ -22,6 +22,7 @@
 
 #include <Core/Util/Global.hpp>
 #include <QWidget>
+#include <array>
 
 namespace Ui
 {
@@ -34,8 +35,8 @@ class IVFilter : public QWidget
 public:
     explicit IVFilter(QWidget *parent = nullptr);
     ~IVFilter() override;
-    QVector<u8> getLower() const;
-    QVector<u8> getUpper() const;
+    std::array<u8, 6> getLower() const;
+    std::array<u8, 6> getUpper() const;
     void clearValues();
 
 private:

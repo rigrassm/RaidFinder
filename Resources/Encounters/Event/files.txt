@@ -29,3 +29,11 @@
 201120_skwovet.bin,819
 201201_ponyta.bin,77
 201225_vulpix.bin,37
+210101_duraludon.bin,884
+210108_greedent.bin,820
+210122_tauros.bin,128
+210201_lucario.bin,448
+210204_cramorant.bin,845
+210212_milcery.bin,868
+210226_pikachu.bin,25
+210301_weezing.bin,110

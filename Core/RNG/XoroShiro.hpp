@@ -22,11 +22,6 @@
 
 #include <Core/Util/Global.hpp>
 
-inline u64 rotl(u64 x, u8 k)
-{
-    return (x << k) | (x >> (64 - k));
-}
-
 class XoroShiro
 {
 public:
@@ -38,30 +33,34 @@ public:
     {
     }
 
-    u32 nextInt(u32 max, u32 mask, int &count)
+    template <u32 max>
+    u32 nextInt()
     {
-        u32 result;
-        do
+        auto bitMask = [](u32 x) constexpr
         {
-            result = next() & mask;
-            count++;
-        } while (result >= max);
-        return result;
-    }
+            x--;
+            x |= x >> 1;
+            x |= x >> 2;
+            x |= x >> 4;
+            x |= x >> 8;
+            x |= x >> 16;
+            return x;
+        };
 
-    u32 nextInt(u32 max, u32 mask)
-    {
-        u32 result;
-        do
+        constexpr u32 mask = bitMask(max);
+        if constexpr ((max - 1) == mask)
         {
-            result = next() & mask;
-        } while (result >= max);
-        return result;
-    }
-
-    u32 nextInt(u32 mask)
-    {
-        return next() & mask;
+            return next() & mask;
+        }
+        else
+        {
+            u32 result;
+            do
+            {
+                result = next() & mask;
+            } while (result >= max);
+            return result;
+        }
     }
 
 private:
@@ -73,6 +72,8 @@ private:
         const u64 s0 = state0;
         u64 s1 = state1;
         const u64 result = s0 + s1;
+
+        auto rotl = [](u64 x, int k) { return (x << k) | (x >> (64 - k)); };
 
         s1 ^= s0;
         state0 = rotl(s0, 24) ^ s1 ^ (s1 << 16);

@@ -38,9 +38,9 @@ RaidGenerator::RaidGenerator(u32 initialAdvances, u32 maxAdvances, u16 tid, u16 
 {
 }
 
-QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) const
+std::vector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) const
 {
-    QVector<State> states;
+    std::vector<State> states;
     u16 tsv = (tid ^ sid) >> 4;
 
     seed += 0x82A2B175229D6A5B * initialAdvances;
@@ -50,24 +50,25 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
         XoroShiro rng(seed);
         State result(seed, initialAdvances + advance);
 
-        u32 ec = rng.nextInt(0xffffffff, 0xffffffff);
+        u32 ec = rng.nextInt<0xffffffff>();
         result.setEC(ec);
 
-        u32 sidtid = rng.nextInt(0xffffffff, 0xffffffff);
-        u32 pid = rng.nextInt(0xffffffff, 0xffffffff);
+        u32 sidtid = rng.nextInt<0xffffffff>();
+        u32 pid = rng.nextInt<0xffffffff>();
 
         if (shinyType == 0) // Random shiny chance
         {
             // Game uses a fake TID/SID to determine shiny or not
             // PID is later modified using the actual TID/SID of trainer if necessary
-            u16 shinyXor = (sidtid >> 16) ^ (sidtid & 0xffff) ^ (pid >> 16) ^ (pid & 0xffff);
+            u16 fakeXor = (sidtid >> 16) ^ (sidtid & 0xffff) ^ (pid >> 16) ^ (pid & 0xffff);
             u16 psv = ((pid >> 16) ^ (pid & 0xffff)) >> 4;
+            u16 realXor = (pid >> 16) ^ (pid & 0xffff) ^ tid ^ sid;
 
-            if (shinyXor < 16) // Force shiny
+            if (fakeXor < 16) // Force shiny
             {
-                u8 shinyType = shinyXor == 0 ? 2 : 1;
+                u8 shinyType = fakeXor == 0 ? 2 : 1;
                 result.setShiny(shinyType);
-                if (psv != tsv)
+                if (fakeXor != realXor)
                 {
                     u16 high = (pid & 0xFFFF) ^ tid ^ sid ^ (2 - shinyType);
                     pid = (high << 16) | (pid & 0xFFFF);
@@ -93,26 +94,13 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
         }
         else // Force shiny
         {
-            u16 shinyXor = (sidtid >> 16) ^ (sidtid & 0xffff) ^ (pid >> 16) ^ (pid & 0xffff);
-            if (shinyXor >= 16) // Check if PID is not normally shiny
+            result.setShiny(2);
+            u16 realXor = (pid >> 16) ^ (pid & 0xffff) ^ tid ^ sid;
+            if (realXor) // Check if PID is not normally square shiny
             {
                 // Force shiny (makes it square)
                 u16 high = (pid & 0xffff) ^ tid ^ sid;
                 pid = (high << 16) | (pid & 0xffff);
-                result.setShiny(2);
-            }
-            else
-            {
-                u8 shinyType = shinyXor == 0 ? 2 : 1;
-                u16 psv = ((pid >> 16) ^ (pid & 0xffff)) >> 4;
-                result.setShiny(shinyType);
-
-                // Modify PID to be shiny under actual TID/SID if necessary
-                if (psv != tsv)
-                {
-                    u16 high = (pid & 0xffff) ^ tid ^ sid ^ (2 - shinyType);
-                    pid = (high << 16) | (pid & 0xffff);
-                }
             }
         }
         result.setPID(pid);
@@ -126,7 +114,7 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
         // Set IVs that will be 31s
         for (u8 i = 0; i < ivCount;)
         {
-            u8 index = static_cast<u8>(rng.nextInt(6, 7));
+            u8 index = rng.nextInt<6>();
             if (result.getIV(index) == 255)
             {
                 result.setIV(index, 31);
@@ -139,17 +127,17 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
         {
             if (result.getIV(i) == 255)
             {
-                result.setIV(i, static_cast<u8>(rng.nextInt(31)));
+                result.setIV(i, rng.nextInt<32>());
             }
         }
 
         if (abilityType == 4) // Allow hidden ability
         {
-            result.setAbility(static_cast<u8>(rng.nextInt(3, 3)));
+            result.setAbility(rng.nextInt<3>());
         }
         else if (abilityType == 3) // No hidden ability
         {
-            result.setAbility(static_cast<u8>(rng.nextInt(1)));
+            result.setAbility(rng.nextInt<2>());
         }
         else // Locked ability
         {
@@ -174,7 +162,7 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
             }
             else // Random
             {
-                result.setGender(static_cast<u8>(rng.nextInt(253, 255) + 1) < genderRatio);
+                result.setGender((rng.nextInt<253>() + 1) < genderRatio);
             }
         }
         else if (genderType == 1) // Male
@@ -192,17 +180,17 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
 
         if (species != 849)
         {
-            result.setNature(static_cast<u8>(rng.nextInt(25, 31)));
+            result.setNature(rng.nextInt<25>());
         }
         else
         {
             if (altform == 0)
             {
-                result.setNature(toxtricityAmpedNatures[rng.nextInt(13, 15)]);
+                result.setNature(toxtricityAmpedNatures[rng.nextInt<13>()]);
             }
             else
             {
-                result.setNature(toxtricityLowKeyNatures[rng.nextInt(12, 15)]);
+                result.setNature(toxtricityLowKeyNatures[rng.nextInt<12>()]);
             }
         }
 
@@ -211,7 +199,7 @@ QVector<State> RaidGenerator::generate(const StateFilter &filter, u64 seed) cons
 
         if (filter.compareState(result))
         {
-            states.append(result);
+            states.emplace_back(result);
         }
     }
 
